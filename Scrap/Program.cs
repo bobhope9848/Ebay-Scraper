@@ -4,17 +4,39 @@ using System.Net.Http;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Scrap
 {
     class Program
     {
         static List<Listed> listed = new List<Listed>();
+        //How many pages to search
         static int pages = 5;
-        static string searchterm;
+        static string searchterm = "";
+        //Display found listings and then hold up program
+        static bool displayhold = false;
+        //Checks ebay for new listings every X minutes
+        static int CheckForUpdate = 30;
         static void Main(string[] args)
-        {
-            Grab();
+        {   
+            if (args.Count() > 0)
+            {
+                //Split argument recieved at = sign (eg. --check=60)
+                string[] split = args[0].Split("=");
+                //Convert number recieved to int CheckForUpdate and set default 60min on failure
+                if (!int.TryParse(split[1], out CheckForUpdate))
+                {
+                    CheckForUpdate = 60;
+                }
+                //Continuously run program every X amount of minutes 
+                while (split[0].Contains("check"))
+                {
+                    Grab();
+                    Thread.Sleep(CheckForUpdate * 60000);
+                }
+            }
+            
         }
         /// <summary>
         /// Grabs SaleType, Title, Price, Url data from all listings on page 
@@ -22,6 +44,7 @@ namespace Scrap
         /// <param name="Link"></param>
         static void Grab()
         {
+            int errorcount = 0;
             if (searchterm == null)
             {
                 Console.WriteLine("Enter search term");
@@ -31,13 +54,24 @@ namespace Scrap
             HtmlNode bidbuy;
             HttpClient httpClient = new HttpClient();
             HtmlDocument htmlDocument = new HtmlDocument();
-            string html;
+            string html = string.Empty;
             //Grabs listings from specified number of pages
             for (int j = 1; j < pages; j++)
             {
                 string Link = $"https://www.ebay.com/sch/i.html?_from=R40&_nkw={searchterm}&_sacat=0&_pgn={j}";
                 //Grabs html document from page
-                html = httpClient.GetStringAsync(Link).Result;
+                try
+                {
+                    html = httpClient.GetStringAsync(Link).Result;
+                }
+                catch (Exception)
+                {
+                    Thread.Sleep(5000);
+                    html = httpClient.GetStringAsync(Link).Result;
+                    errorcount++;
+                    continue;
+
+                }
                 //Load document into htmlagilitypack document editor
                 htmlDocument.LoadHtml(html);
                 //Very important never remove
@@ -64,19 +98,24 @@ namespace Scrap
             
             //Grabs search term for database naming later
             string SearchTerm = htmlDocument.DocumentNode.Descendants().Where(node => node.GetAttributeValue("class", "").Equals("gh-tb ui-autocomplete-input")).First().ChildAttributes("value").First().Value;
-            foreach (var item in listed)
-            {
-                
-                Console.WriteLine(item.SaleType);
-                Console.WriteLine(item.Title);
-                Console.WriteLine(item.Price);
-                Console.WriteLine(item.Url);
-            }
             //Sends results to DataAccess class
             DataAccess.SaveResults(SearchTerm, listed);
-            
-            Console.ReadLine();
-
+            if (displayhold)
+            {
+                foreach (var item in listed)
+                {
+                    
+                    Console.WriteLine(item.SaleType);
+                    Console.WriteLine(item.Title);
+                    Console.WriteLine(item.Price);
+                    Console.WriteLine(item.Url);
+                }
+                Console.ReadLine();
+            }
+            else
+            {
+                Console.WriteLine($"Last checked at {DateTime.Now} for {SearchTerm}");
+            }
         }
     }
 }
