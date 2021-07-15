@@ -19,22 +19,27 @@ namespace Scrap
         //Checks ebay for new listings every X minutes
         static int CheckForUpdate = 30;
         static void Main(string[] args)
-        {   
+        {
             if (args.Count() > 0)
             {
                 //Split argument recieved at = sign (eg. --check=60)
                 string[] split = args[0].Split("=");
-                //Convert number recieved to int CheckForUpdate and set default 60min on failure
-                if (!int.TryParse(split[1], out CheckForUpdate))
+                if (split[0] == "--check")
                 {
-                    CheckForUpdate = 60;
+                    //Convert number recieved to int CheckForUpdate and set default 60min on failure
+                    if (!int.TryParse(split[1], out CheckForUpdate))
+                    {
+                        CheckForUpdate = 30;
+                    }
                 }
-                //Continuously run program every X amount of minutes 
-                while (split[0].Contains("check"))
-                {
-                    Grab();
-                    Thread.Sleep(CheckForUpdate * 60000);
-                }
+                
+            }
+            
+            //Continuously run program every X amount of minutes 
+            while (true)
+            {
+                Grab();
+                Thread.Sleep(CheckForUpdate * 60000);
             }
             
         }
@@ -45,7 +50,7 @@ namespace Scrap
         static void Grab()
         {
             int errorcount = 0;
-            if (searchterm == null)
+            if (string.IsNullOrEmpty(searchterm))
             {
                 Console.WriteLine("Enter search term");
                 searchterm = Console.ReadLine();
