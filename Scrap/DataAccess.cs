@@ -38,7 +38,7 @@ namespace Scrap
         /// </summary>
         /// <param name="name"></param>
         /// <param name="listed"></param>
-        public static void SaveResults(string name, List<Listed> listed)
+        public static void SaveResults(string name, List<Listed> listed, int skipped)
         {
             //Checks if database exists
             CheckDB(name);
@@ -60,7 +60,7 @@ namespace Scrap
                 result += send.ExecuteNonQuery();
             }
             con.Close();
-            Console.WriteLine("Rows Added : {0}", result);
+            Console.WriteLine("Rows Added : {0}", result - skipped);
         }
     }
 }

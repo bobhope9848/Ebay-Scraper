@@ -17,7 +17,9 @@ namespace Scrap
         //Display found listings and then hold up program
         static bool displayhold = false;
         //Checks ebay for new listings every X minutes
-        static int CheckForUpdate = 30;
+        static int CheckForUpdate = 1;
+        //Variable for how many listings skipped due to errors
+        static int skipped = 0;
         static void Main(string[] args)
         {
             if (args.Count() > 0)
@@ -64,18 +66,21 @@ namespace Scrap
             for (int j = 1; j < pages; j++)
             {
                 string Link = $"https://www.ebay.com/sch/i.html?_from=R40&_nkw={searchterm}&_sacat=0&_pgn={j}";
-                //Grabs html document from page
-                try
+                //Keep trying until error count is above 10 or if html is empty
+                while (html == string.Empty || errorcount > 10)
                 {
-                    html = httpClient.GetStringAsync(Link).Result;
-                }
-                catch (Exception)
-                {
-                    Thread.Sleep(5000);
-                    html = httpClient.GetStringAsync(Link).Result;
-                    errorcount++;
-                    continue;
+                    try
+                    {
+                         //Grabs html document from page
+                        html = httpClient.GetStringAsync(Link).Result;
+                        break;
+                    }
+                    catch (Exception)
+                    {
+                        Thread.Sleep(5000);
+                        errorcount++;
 
+                    }
                 }
                 //Load document into htmlagilitypack document editor
                 htmlDocument.LoadHtml(html);
@@ -89,7 +94,9 @@ namespace Scrap
                     //Grabs class on current listing that matches "s-item__bids s-item__bidCount"
                     bidbuy = ProductList[i].Descendants().Where(node => node.GetAttributeValue("class", "").Equals("s-item__bids s-item__bidCount")).FirstOrDefault();
                     //Creation of Listed object to add to "listed" list
-                    listed.Add(new Listed(
+                    try
+                    {
+                        listed.Add(new Listed(
                         //If null means s-item__bids... class not exist and thus must be buy listing.
                         bidbuy == null? "Buy":"Bid",
                         //Grabs title from s-item__title class and removes non-unicode char, "New Listing" and whitespace prefixing
@@ -98,13 +105,20 @@ namespace Scrap
                         $"{ProductList[i].Descendants().Where(node => node.GetAttributeValue("class", "").Equals("s-item__link")).First().GetAttributeValue("href", "")}", 
                         //Gets pricing data from s-item__price class and removes $, whitespace then splits string at "to" (ex. "$140 to $160") and takes first split finally parsing result to decimal 
                         Decimal.Parse(ProductList[i].Descendants().Where(node => node.GetAttributeValue("class", "").Equals("s-item__price")).First().InnerText.Replace("$","").Replace(" ", "").Split("to").First(), System.Globalization.CultureInfo.InvariantCulture)));
+                    }
+                    catch (Exception)
+                    {
+                        skipped++;
+                        continue;
+                    }
+                    
                 }
             }
             
             //Grabs search term for database naming later
             string SearchTerm = htmlDocument.DocumentNode.Descendants().Where(node => node.GetAttributeValue("class", "").Equals("gh-tb ui-autocomplete-input")).First().ChildAttributes("value").First().Value;
             //Sends results to DataAccess class
-            DataAccess.SaveResults(SearchTerm, listed);
+            DataAccess.SaveResults(SearchTerm, listed, skipped);
             if (displayhold)
             {
                 foreach (var item in listed)
